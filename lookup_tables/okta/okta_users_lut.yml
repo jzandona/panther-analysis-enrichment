@@ -1,0 +1,13 @@
+AnalysisType: lookup_table # always lookup_table
+LookupName: okta users api # str
+Enabled: true # bool
+Description: Lookup table description # str (Optional)
+Filename: ./okta_users.jsonl # str (Optional)
+Reference: An optional reference link # str (Optional)
+Schema: Custom.OktaUsersAPIDevV1 # str (should already exist)
+LogTypeMap:
+  PrimaryKey: id # str
+  AssociatedLogTypes: # [...]
+    - LogType: Okta.SystemLog # str
+      Selectors: # [str]
+        - '$.actor.id'

@@ -1,0 +1,13 @@
+AnalysisType: lookup_table
+LookupName: AWS IP Ranges
+Enabled: true
+Description: Lookup table description
+Filename: ./aws_ip_ranges.jsonl
+Reference: https://ip-ranges.amazonaws.com/ip-ranges.json
+Schema: Custom.AWSCloudRange
+LogTypeMap:
+  PrimaryKey: ipPrefix
+  AssociatedLogTypes:
+    - LogType: AWS.CloudTrail
+      Selectors:
+        - sourceIPAddress

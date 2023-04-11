@@ -1,0 +1,72 @@
+name: okta_users
+
+on:
+  # schedule:
+  #   - cron: "0 0 * * *"
+  workflow_dispatch: # or on button click  
+
+jobs:
+  check_variables:
+    runs-on: ubuntu-latest
+    outputs:
+      host_set: ${{ steps.check_host.outputs.host_set}}
+      secret_set: ${{ steps.check_secret.outputs.secret_set}}
+      okta_secret_set: ${{ steps.check_okta_secret.outputs.okta_secret_set}}
+    steps:
+      - id: check_host
+        env:
+          PANTHER_HOST: ${{ secrets.PANTHER_HOST }}
+        if: env.PANTHER_HOST != null
+        run: |
+          echo "host_set=true" >> $GITHUB_OUTPUT
+      - id: check_secret
+        env:
+          PANTHER_API_TOKEN: ${{ secrets.PANTHER_API_TOKEN }}
+        if: env.PANTHER_API_TOKEN != null
+        run: echo "secret_set=true" >> $GITHUB_OUTPUT
+      - id: check_okta_secret
+        env:
+          OKTA_API_TOKEN: ${{ secrets.OKTA_API_TOKEN }}
+        if: env.OKTA_API_TOKEN != null
+        run: echo "okta_secret_set=true" >> $GITHUB_OUTPUT
+
+  curl_api:
+    needs: [check_variables]
+    if: |
+      ${{needs.check_variables.outputs.host_set}} == 'true' &&
+      ${{needs.check_variables.outputs.secret_set}} == 'true' &&
+      ${{needs.check_variables.outputs.okta_secret_set}} == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - id: checkout_repo
+        name: Checkout the repo
+        uses: actions/checkout@v3
+          
+      - id: curl_okta
+        name: Curl okta
+        run: |
+          curl -X GET \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: SSWS ${{ secrets.OKTA_API_TOKEN }}" \
+            "https://${{ secrets.OKTA_DOMAIN }}/api/v1/users?" | \
+            jq -c '.[]' > lookup_tables/okta/okta_users.jsonl
+     
+     #should check if successfull response
+      - id: response_stats
+        name: Quick stats on response
+        run: | 
+          wc lookup_tables/okta/okta_users.jsonl
+          
+      - id: download_pat
+        name: Download panther_analysis_tool
+        run: pip3 install panther_analysis_tool
+        
+      - id: upload_lut
+        name: Upload LUT via panther_analysis_tool
+        run: |
+          panther_analysis_tool upload --path lookup_tables/okta/ \
+            --filter  AnalysisType=lookup_table \
+            --api-token ${{ secrets.PANTHER_API_TOKEN }} \
+            --api-host ${{ secrets.PANTHER_HOST }}

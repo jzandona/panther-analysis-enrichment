@@ -1,0 +1,65 @@
+name: gcp_ip_ranges
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 00:00Z, every day
+  workflow_dispatch: # or on button click  
+
+jobs:
+  check_variables:
+    runs-on: ubuntu-latest
+    outputs:
+      host_set: ${{ steps.check_host.outputs.host_set}}
+      secret_set: ${{ steps.check_secret.outputs.secret_set}}
+    steps:
+      - id: check_host
+        env:
+          PANTHER_HOST: ${{ secrets.PANTHER_HOST }}
+        if: env.PANTHER_HOST != null
+        run: |
+          echo "host_set=true" >> $GITHUB_OUTPUT
+      - id: check_secret
+        env:
+          PANTHER_API_TOKEN: ${{ secrets.PANTHER_API_TOKEN }}
+        if: env.PANTHER_API_TOKEN != null
+        run: echo "secret_set=true" >> $GITHUB_OUTPUT
+
+  curl_api:
+    needs: [check_variables]
+    if: |
+      ${{needs.check_variables.outputs.host_set}} == 'true' &&
+      ${{needs.check_variables.outputs.secret_set}} == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout_repo
+        name: Checkout the repo
+        uses: actions/checkout@v3
+      
+      - id: curl_gcp_ip_ranges
+        name: Curl GCP IP Ranges
+        run: |
+          HTTP_STATUS=$(curl -w "%{http_code}" -o ipranges.json -X GET https://www.gstatic.com/ipranges/cloud.json)
+          cat ipranges.json | jq -c '.prefixes | map(with_entries( if .key | startswith("ipv") then .key = "ipPrefix" else . end)) | .[]' \
+            > lookup_tables/gcp/gcp_ip_ranges.jsonl
+          echo "HTTP_STATUS=$HTTP_STATUS" >> $GITHUB_ENV
+     
+        #TODO test and make sure not 200 skips the rest of the steps
+      - id: response_stats
+        name: Quick stats on response
+        if: ${{ env.HTTP_STATUS }} == '200'
+        run: | 
+          echo "${{ env.HTTP_STATUS }}" 
+          wc lookup_tables/gcp/gcp_ip_ranges.jsonl 
+          
+      - id: download_pat
+        name: Download panther_analysis_tool
+        run: pip3 install panther_analysis_tool
+
+      - id: upload_lut
+        name: Upload LUT via panther_analysis_tool
+        run: |
+          panther_analysis_tool ${{ vars.DEBUG_FLAG }} upload \
+            --path lookup_tables/gcp/ \
+            --filter  AnalysisType=lookup_table \
+            --api-token ${{ secrets.PANTHER_API_TOKEN }} \
+            --api-host ${{ secrets.PANTHER_HOST }}

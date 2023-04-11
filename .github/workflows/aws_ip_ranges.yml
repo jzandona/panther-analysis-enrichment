@@ -1,0 +1,65 @@
+name: aws_ip_ranges
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 00:00Z, every day
+  workflow_dispatch: # or on button click  
+
+jobs:
+  check_variables:
+    runs-on: ubuntu-latest
+    outputs:
+      host_set: ${{ steps.check_host.outputs.host_set}}
+      secret_set: ${{ steps.check_secret.outputs.secret_set}}
+    steps:
+      - id: check_host
+        env:
+          PANTHER_HOST: ${{ secrets.PANTHER_HOST }}
+        if: env.PANTHER_HOST != null
+        run: |
+          echo "host_set=true" >> $GITHUB_OUTPUT
+      - id: check_secret
+        env:
+          PANTHER_API_TOKEN: ${{ secrets.PANTHER_API_TOKEN }}
+        if: env.PANTHER_API_TOKEN != null
+        run: echo "secret_set=true" >> $GITHUB_OUTPUT
+  
+  
+  curl_api:
+    needs: [check_variables]
+    if: |
+      ${{needs.check_variables.outputs.host_set}} == 'true' &&
+      ${{needs.check_variables.outputs.secret_set}} == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout_repo
+        name: Checkout the repo
+        uses: actions/checkout@v3
+
+      #combine ip_prefixes and ipv6_prefix arrays from output and merge to 'ipPrefix', group by ipPrefix and map service into an array    
+      - id: curl_aws_ip_ranges
+        name: Curl AWS IP Ranges
+        run: |
+          curl -X GET https://ip-ranges.amazonaws.com/ip-ranges.json | \
+              jq -c '.prefixes + .ipv6_prefixes | map(with_entries( if .key | startswith("ip") then .key = "ipPrefix" else . end)) | .[]' | \
+              jq -c -s 'group_by(.ipPrefix) | map({ipPrefix: .[0].ipPrefix, region: .[0].region,  network_border_group: .[0].network_border_group, service: map(.service) | flatten | unique}) | .[] ' \
+              > lookup_tables/aws/aws_ip_ranges.jsonl
+     
+     #should check if successfull response
+      - id: response_stats
+        name: Quick stats on response
+        # if: ${{ env.HTTP_STATUS }} == '200'
+        run: | 
+          wc lookup_tables/aws/aws_ip_ranges.jsonl  
+          
+      - id: download_pat
+        name: Download panther_analysis_tool
+        run: pip3 install panther_analysis_tool
+        
+      - id: upload_lut
+        name: Upload LUT via panther_analysis_tool
+        run: |
+          panther_analysis_tool ${{ vars.DEBUG_FLAG }} upload --path lookup_tables/aws/ \
+            --filter  AnalysisType=lookup_table \
+            --api-token ${{ secrets.PANTHER_API_TOKEN }} \
+            --api-host ${{ secrets.PANTHER_HOST }}

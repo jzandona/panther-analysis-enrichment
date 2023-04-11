@@ -1,0 +1,13 @@
+AnalysisType: lookup_table
+LookupName: GCP IP Ranges
+Enabled: true
+Description: GCP Cloud IP Range List
+Filename: ./gcp_ip_ranges.jsonl
+Reference: https://www.gstatic.com/ipranges/cloud.json
+Schema: Custom.GCPCIDRs
+LogTypeMap:
+  PrimaryKey: ipPrefix
+  AssociatedLogTypes:
+    - LogType: GCP.AuditLog
+      Selectors:
+        - '$.protoPayload.requestMetadata.callerIp'

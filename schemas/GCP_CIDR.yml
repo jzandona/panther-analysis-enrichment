@@ -1,0 +1,17 @@
+schema: Custom.GCPCIDR
+description: |
+  Schema for GCP cloud IP ranges
+referenceURL: https://www.gstatic.com/ipranges/cloud.json
+version: 0
+fields:
+    - name: ipPrefix
+      required: true
+      type: string
+      validate:
+        cidr: "any"
+    - name: scope
+      required: true
+      type: string
+    - name: service
+      required: true
+      type: string

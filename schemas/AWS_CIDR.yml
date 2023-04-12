@@ -1,0 +1,22 @@
+schema: Custom.AWSCIDR
+description: |
+  Schema for AWS cloud IP ranges
+referenceURL: https://ip-ranges.amazonaws.com/ip-ranges.json
+version: 0
+fields:
+    - name: ipPrefix
+      required: true
+      type: string
+      validate:
+        cidr: "any"
+    - name: network_border_group
+      required: true
+      type: string
+    - name: region
+      required: true
+      type: string
+    - name: service
+      required: true
+      type: array
+      element:
+        type: string

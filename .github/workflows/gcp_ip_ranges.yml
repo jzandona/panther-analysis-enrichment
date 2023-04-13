@@ -1,8 +1,8 @@
 name: gcp_ip_ranges
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # 00:00Z, every day
+  # schedule:
+  #   - cron: "0 0 * * *" # 00:00Z, every day
   workflow_dispatch: # or on button click  
 
 jobs:
